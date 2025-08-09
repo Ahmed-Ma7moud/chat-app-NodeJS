@@ -6,7 +6,7 @@ exports.getMessages = async (req, res) => {
     const { conversationID } = req.params;
     
     if (!conversationID || !mongoose.Types.ObjectId.isValid(conversationID)) {
-        return res.status(400).json({ msg: "Invalid conversation ID" });
+        return res.status(400).json({ message: "Invalid conversation ID" });
     }
 
     try {
@@ -15,7 +15,7 @@ exports.getMessages = async (req, res) => {
             .lean();
 
         if (!conversation) {
-            return res.status(404).json({ msg: "Conversation not found" });
+            return res.status(404).json({ message: "Conversation not found" });
         }
 
         const isAllowed = conversation.participants.some(participant => 
@@ -23,7 +23,7 @@ exports.getMessages = async (req, res) => {
         );
 
         if (!isAllowed) {
-            return res.status(403).json({ msg: "Access denied" });
+            return res.status(403).json({ message: "Access denied" });
         }
 
         const messages = await Message.find({ conversationID })
@@ -31,10 +31,10 @@ exports.getMessages = async (req, res) => {
             .sort({ createdAt: 1 }) 
             .lean();
 
-        res.status(200).json({ msg: "success", messages });
+        res.status(200).json({ message: "success", messages });
 
     } catch (error) {
         console.error('Get messages error:', error);
-        res.status(500).json({ msg: "Internal server error" });
+        res.status(500).json({ message: "Internal server error" });
     }
 };

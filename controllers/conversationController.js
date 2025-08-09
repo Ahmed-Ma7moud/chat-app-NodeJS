@@ -1,4 +1,3 @@
-const { default: mongoose } = require('mongoose');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Message = require('../models/Message');
@@ -11,24 +10,24 @@ exports.createConversation = async (req, res) => {
     groupName = groupName ? groupName.trim() : '';
     messageContent = messageContent ? messageContent.trim() : '';
     if(!type)
-        return res.status(400).json({msg : "invalid type"})
+        return res.status(400).json({message : "invalid type"})
     try{
         if(type == "private"){
             if(!phone || !messageContent)
-                return res.status(400).json({msg : "phone and message content are required for private conversation"});
+                return res.status(400).json({message : "phone and message content are required for private conversation"});
             if(req.user.phone === phone)
-                return res.status(400).json({msg : "You cannot chat with yourself"});
-            
+                return res.status(400).json({message : "You cannot chat with yourself"});
+
             const user = await User.findOne({ phone });
             if(!user)
-                return res.status(404).json({msg : "User not found"});
+                return res.status(404).json({message : "User not found"});
             // $all for order independence
             const existingConversation = await Conversation.findOne({
                 participants: { $all: [req.user.id, user._id] },
                 type: 'private'
             });
             if(existingConversation)
-                return res.status(400).json({msg : "Conversation already exists", conversation: existingConversation});
+                return res.status(400).json({message : "Conversation already exists", conversation: existingConversation});
             
             // Create new conversation
             let newConversation = new Conversation({
@@ -76,14 +75,14 @@ exports.createConversation = async (req, res) => {
                 io.to(socketId).emit('new conversation', newConversation);
             }
             return res.status(201).json({
-                msg: "Conversation created successfully",
+                message: "Conversation created successfully",
                 conversation: newConversation
             });
         }else if(type == "group"){
             if(!participants || participants.length < 1)
-                return res.status(400).json({msg : "At least one participant must be added"});
+                return res.status(400).json({message : "At least one participant must be added"});
             if(!groupName)
-                return res.status(400).json({msg : "Group name is required"});
+                return res.status(400).json({message : "Group name is required"});
             const newConversation = new Conversation({
                 participants: [req.user.id, ...participants],
                 type: 'group',
@@ -92,12 +91,12 @@ exports.createConversation = async (req, res) => {
             await newConversation.save();
             return res.status(201).json(newConversation);
         }else{
-            return res.status(400).json({msg : "Invalid conversation type"});
+            return res.status(400).json({message : "Invalid conversation type"});
         }
 
     }catch(err){
         console.error(err);
-        res.status(500).json({msg : "Internal server error"});
+        res.status(500).json({message : "Internal server error"});
     }
 };
 
@@ -112,7 +111,7 @@ exports.getConversations = async (req, res) => {
         .lean();
 
         res.status(200).json({ 
-            msg: "success", 
+            message: "success", 
             conversations
         });
     } catch (error) {
