@@ -2,7 +2,7 @@ const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const onlineUsers = require('../services/onlineUsers');
 const socketAuth = require('../middlewares/socketAuth').socketAuth;
-const { conversationHandler, messageHandler, statusHandler } = require('./handlers');
+const { conversationHandler, messageHandler, statusHandler , typingHandler} = require('./handlers');
 
 const initializeSocket = (io) => {
   // Apply socket authentication middleware
@@ -18,7 +18,7 @@ const initializeSocket = (io) => {
     conversationHandler(socket, io);
     messageHandler(socket, io);
     statusHandler(socket, io);
-
+    typingHandler(socket, io);
     // Error handling
     socket.on('error', (error) => {
       console.error('Socket error:', error);
