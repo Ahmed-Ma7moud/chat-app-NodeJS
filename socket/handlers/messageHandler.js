@@ -1,7 +1,7 @@
 const Message = require('../../models/Message');
 const Conversation = require('../../models/Conversation');
 const onlineUsers = require('../../services/onlineUsers');
-
+const {messageSchema} = require('../../validation/message');
 module.exports = (socket, io) => {
   // Handle sending messages
   socket.on('message', async (data) => {
@@ -10,6 +10,11 @@ module.exports = (socket, io) => {
 
     if (!conversationID || !message) {
       return socket.emit('err', 'Invalid message data');
+    }
+
+    const { error } = messageSchema.validate(data);
+    if (error) {
+      return socket.emit('err', error.details[0].message);
     }
 
     try {

@@ -1,3 +1,5 @@
 node_modules
 .env
 public
+chat-app-index.txt
+readme.md
