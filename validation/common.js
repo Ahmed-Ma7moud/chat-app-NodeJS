@@ -28,10 +28,10 @@ const phone = joi.string().trim()
 .pattern(/^(010|011|012|015)[0-9]{8}$/).messages({
   'string.pattern.base': 'Phone number must be a valid 11-digit number'
 });
-const messageContent = joi.string().trim().min(1).max(500).messages({
+const messageContent = joi.string().trim().min(1).max(2500).messages({
   'string.empty': 'Message content cannot be empty',
   'string.min': 'Message content must be at least 1 character long',
-  'string.max': 'Message content must be no more than 500 characters long'
+  'string.max': 'Message content must be no more than 2500 characters long'
 });
 const participants = joi.array().items(phone).min(1).messages({
   'array.min': 'At least one participant must be added',
