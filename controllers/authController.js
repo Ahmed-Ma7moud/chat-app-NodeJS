@@ -1,10 +1,11 @@
 const User = require('../models/User')
-
+const sanitize = require('../utils/sanitize')
 exports.register = async (req , res , next) => {
-    const {name , phone , password} = req.body;
-    if(!name || !phone || !password) {
-        return res.status(400).json({ message: 'All fields are required' });
-    }
+    const {name , phone , password} = sanitize({
+        name: req.body.name,
+        phone: req.body.phone,
+        password: req.body.password
+    });
     try {
         const existingUser = await User.findOne({ phone });
         if (existingUser) {
@@ -24,7 +25,10 @@ exports.register = async (req , res , next) => {
 }
 
 exports.login = async (req, res, next) => {
-    const { phone, password } = req.body;
+    const { phone, password } = sanitize({
+        phone: req.body.phone,
+        password: req.body.password
+    });
     if (!phone || !password) {
         return res.status(400).json({ message: 'Phone number and password are required' });
     }
@@ -48,38 +52,6 @@ exports.login = async (req, res, next) => {
         });
     } catch (error) {
         console.log('Login error:', error);
-        return res.status(500).json({ message: 'Internal server error' });
-    }
-}
-
-exports.register = async (req , res , next) => {
-    const {name , phone , password} = req.body;
-    if(!name || !phone || !password) {
-        return res.status(400).json({ message: 'All fields are required' });
-    }
-    try {
-        const existingUser = await User.findOne({ phone });
-        if (existingUser) {
-            return res.status(400).json({ message: 'Phone number already exists' });
-        }
-        const newUser = new User({ 
-            name, 
-            phone, 
-            password 
-        });
-        await newUser.save();
-        const token = newUser.generateAccessToken();
-        res.status(201).json({ 
-            message: 'User registered successfully',
-            user: { 
-                id: newUser._id,
-                name: newUser.name, 
-                phone: newUser.phone 
-            }, 
-            token 
-        });
-    } catch (error) {
-        console.log('Registration error:', error);
         return res.status(500).json({ message: 'Internal server error' });
     }
 }

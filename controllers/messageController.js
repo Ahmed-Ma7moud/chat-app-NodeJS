@@ -1,11 +1,11 @@
 const Message = require('../models/Message')
 const Conversation = require('../models/Conversation')
-const mongoose = require('mongoose')
-
+const {objectId} = require('../validation/common')
 exports.getMessages = async (req, res) => {
     const { conversationID } = req.params;
-    
-    if (!conversationID || !mongoose.Types.ObjectId.isValid(conversationID)) {
+    const {error} = objectId.validate(conversationID);
+
+    if (error) {
         return res.status(400).json({ message: "Invalid conversation ID" });
     }
 

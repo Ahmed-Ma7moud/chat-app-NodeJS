@@ -3,12 +3,16 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const {getIo} = require('../config/socket');
 const onlineUsers = require('../services/onlineUsers');
+const sanitize = require('../utils/sanitize');
+
 exports.createConversation = async (req, res) => {
-    let { type , phone , participants , groupName, messageContent } = req.body;
-    type = type?.trim();
-    phone = phone?.trim();
-    groupName = groupName ? groupName.trim() : '';
-    messageContent = messageContent ? messageContent.trim() : '';
+    let { type , phone , participants , groupName, messageContent } = sanitize({
+        type: req.body.type,
+        phone: req.body.phone,
+        participants: req.body.participants,
+        groupName: req.body.groupName,
+        messageContent: req.body.messageContent
+    });
     if(!type)
         return res.status(400).json({message : "invalid type"})
     try{

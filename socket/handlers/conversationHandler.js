@@ -1,5 +1,4 @@
-const Conversation = require('../../models/Conversation');
-
+const {objectId} = require('../../validation/common');
 module.exports = (socket, io) => {
   // When user clicks on a chat
   socket.on('enter conversation', async ({ conversationID }) => {
@@ -8,7 +7,12 @@ module.exports = (socket, io) => {
       socket.emit('err', 'Invalid conversation ID');
       return;
     }
-    
+
+    const {error} = objectId.validate(conversationID);
+    if (error) {
+      return socket.emit('err', error.details[0].message);
+    }
+
     if (!socket.conversations.has(conversationID.toString())) {
      socket.emit('err', 'You are not part of this conversation');
       return;
@@ -22,6 +26,11 @@ module.exports = (socket, io) => {
     
     if (!conversationID) {
       return socket.emit('err', 'Invalid conversation ID');
+    }
+
+    const {error} = objectId.validate(conversationID);
+    if (error) {
+      return socket.emit('err', error.details[0].message);
     }
 
     if (socket.rooms.has(conversationID.toString())) {

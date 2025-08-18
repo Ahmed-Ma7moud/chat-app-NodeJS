@@ -1,11 +1,16 @@
 const User = require('../../models/User');
 const onlineUsers = require('../../services/onlineUsers');
-
+const {objectId} = require('../../validation/common');
 module.exports = async (socket, io) => {
   // Get user status
   socket.on('get status', async ({ userID }) => {
     console.log(userID);
     
+    const {error} = objectId.validate(userID);
+    if (error) {
+      return socket.emit('err', "invalid userID");
+    }
+
     if (onlineUsers.isUserOnline(userID.toString())) {
       console.log(`User ${userID} is online`);
       socket.emit('user status', {

@@ -2,10 +2,11 @@ const Message = require('../../models/Message');
 const Conversation = require('../../models/Conversation');
 const onlineUsers = require('../../services/onlineUsers');
 const {messageSchema} = require('../../validation/message');
+const xss = require('xss');
 module.exports = (socket, io) => {
   // Handle sending messages
   socket.on('message', async (data) => {
-    const { conversationID, message } = data;
+    let { conversationID, message } = data;
     console.log(`conversationID: ${conversationID}, message: ${message}`);
 
     if (!conversationID || !message) {
@@ -16,6 +17,8 @@ module.exports = (socket, io) => {
     if (error) {
       return socket.emit('err', error.details[0].message);
     }
+
+    message = xss(message);
 
     try {
       // Check if conversation exists in current set
