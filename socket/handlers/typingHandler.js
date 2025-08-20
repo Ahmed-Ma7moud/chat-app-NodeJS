@@ -1,7 +1,6 @@
 const {objectId} = require('../../validation/common')
 module.exports = (socket , io) =>{
     socket.on('typing' , ({conversationID})=>{
-        console.log(new Date())
         const {error} = objectId.validate(conversationID)
         if(error)
             return socket.emit('err' , error.details[0].message);
@@ -12,7 +11,6 @@ module.exports = (socket , io) =>{
         socket.to(conversationID).emit('typing' , {conversationID , user: socket.user})
     })
     socket.on('stopTyping' , ({conversationID})=>{
-        console.log(new Date())
         const {error} = objectId.validate(conversationID)
         if(error)
             return socket.emit('err' , error.details[0].message);

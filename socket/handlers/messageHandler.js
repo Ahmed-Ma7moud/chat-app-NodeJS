@@ -7,7 +7,6 @@ module.exports = (socket, io) => {
   // Handle sending messages
   socket.on('message', async (data) => {
     let { conversationID, message } = data;
-    console.log(`conversationID: ${conversationID}, message: ${message}`);
 
     if (!conversationID || !message) {
       return socket.emit('err', 'Invalid message data');
@@ -22,8 +21,6 @@ module.exports = (socket, io) => {
 
     try {
       // Check if conversation exists in current set
-      console.log(`socket.conversations: ${Array.from(socket.conversations)}`);
-      console.log(`conversationID: ${conversationID}`);
       if (!socket.conversations.has(conversationID.toString())) {
         // If not found, check if user is actually a participant in this conversation
         console.log(`the user is not in this conversation`);
@@ -52,9 +49,7 @@ module.exports = (socket, io) => {
       // Update last message for online users
       conversation.participants.forEach(participant => {
         if (onlineUsers.isUserOnline(participant.toString())) {
-          console.log(`User ${participant} is online`);
           const participantSocketId = onlineUsers.getSocketId(participant.toString());
-          console.log(`participantSocketId: ${participantSocketId}`);
           io.to(participantSocketId).emit('update last message', {
             conversationID,
             message: {

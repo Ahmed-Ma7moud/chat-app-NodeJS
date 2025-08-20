@@ -9,8 +9,6 @@ const initializeSocket = (io) => {
   io.use(socketAuth);
 
   io.on('connection', async (socket) => {
-    console.log(`User ${socket.user.name} connected`);
-
     // Initialize socket with user's conversations
     await initializeUserSocket(socket);
 
@@ -54,9 +52,7 @@ async function initializeUserSocket(socket) {
         userID: socket.user.id,
         status: 'online'
       });
-    });
-    
-    console.log(`Initialized ${conversations.length} conversations for user ${socket.user.name}`);
+    });    
   } catch (error) {
     console.error('Error initializing user socket:', error);
     socket.emit('err', 'Failed to initialize connection');

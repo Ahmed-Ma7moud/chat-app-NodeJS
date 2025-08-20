@@ -13,8 +13,7 @@ exports.createConversation = async (req, res) => {
         groupName: req.body.groupName,
         messageContent: req.body.messageContent
     });
-    if(!type)
-        return res.status(400).json({message : "invalid type"})
+
     try{
         if(type == "private"){
             if(!phone || !messageContent)
@@ -22,26 +21,27 @@ exports.createConversation = async (req, res) => {
             if(req.user.phone === phone)
                 return res.status(400).json({message : "You cannot chat with yourself"});
 
-            const user = await User.findOne({ phone });
-            if(!user)
+            const recipient = await User.findOne({ phone });
+            if(!recipient)
                 return res.status(404).json({message : "User not found"});
             // $all for order independence
             const existingConversation = await Conversation.findOne({
-                participants: { $all: [req.user.id, user._id] },
+                participants: { $all: [req.user.id, recipient._id] },
                 type: 'private'
             });
+
             if(existingConversation)
                 return res.status(400).json({message : "Conversation already exists", conversation: existingConversation});
             
             // Create new conversation
             let newConversation = new Conversation({
-                participants: [req.user.id, user._id],
+                participants: [req.user.id, recipient._id],
                 'lastMessage.content': messageContent,
                 'lastMessage.sender': req.user.id,
             });
             await newConversation.save();
 
-            // Create first message if provided
+            // Create first message
             const firstMessage = new Message({
                 conversationID: newConversation._id,
                 sender: req.user.id,
@@ -49,7 +49,6 @@ exports.createConversation = async (req, res) => {
             });
             await firstMessage.save();
             
-
             // Populate the conversation before returning
             await newConversation.populate('participants', 'name phone isOnline lastSeen');
             
@@ -62,21 +61,19 @@ exports.createConversation = async (req, res) => {
                 const creatorSocket = io.sockets.sockets.get(creatorSocketId);
                 if (creatorSocket && creatorSocket.conversations) {
                     creatorSocket.conversations.add(newConversation._id.toString());
-                    console.log(`Added conversation ${newConversation._id} to creator ${req.user.name}'s socket conversations`);
                 }
             }
             
             // Add conversation to other user's socket if they're online
-            if (onlineUsers.isUserOnline(user._id.toString())) {
-                const socketId = onlineUsers.getSocketId(user._id.toString());
-                const userSocket = io.sockets.sockets.get(socketId);
-                if (userSocket && userSocket.conversations) {
-                    userSocket.conversations.add(newConversation._id.toString());
-                    console.log(`Added conversation ${newConversation._id} to user ${user.name}'s socket conversations`);
+            if (onlineUsers.isUserOnline(recipient._id.toString())) {
+                const recipientSocketId = onlineUsers.getSocketId(recipient._id.toString());
+                const recipientSocket = io.sockets.sockets.get(recipientSocketId);
+                if (recipientSocket && recipientSocket.conversations) {
+                    recipientSocket.conversations.add(newConversation._id.toString());
                 }
                 
                 // Emit the new conversation event
-                io.to(socketId).emit('new conversation', newConversation);
+                io.to(recipientSocketId).emit('new conversation', newConversation);
             }
             return res.status(201).json({
                 message: "Conversation created successfully",

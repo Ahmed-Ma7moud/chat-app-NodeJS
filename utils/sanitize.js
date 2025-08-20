@@ -18,6 +18,4 @@ function sanitize(value) {
   return value; // Return as is if not a string, array, or object
 }
 
-const sanitizedData = sanitize("<b>bold</b>")
-console.log(sanitizedData);
 module.exports = sanitize;

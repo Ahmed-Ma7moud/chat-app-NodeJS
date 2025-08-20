@@ -18,7 +18,7 @@ module.exports = (socket, io) => {
       return;
     }
     socket.join(conversationID.toString());
-    console.log(`User ${socket.user.name} entered conversation ${conversationID}`);
+    // console.log(`User ${socket.user.name} entered conversation ${conversationID}`);
   });
 
   // Leave conversation
