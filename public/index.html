@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Style Chat</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+        }
+        
+        .whatsapp-green { background-color: #25D366; }
+        .whatsapp-dark-green { background-color: #128C7E; }
+        
+        .chat-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: relative;
+        }
+        
+        .sidebar {
+            width: 400px;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            background: #f8f9fa;
+            transition: transform 0.3s ease;
+        }
+        
+        .sidebar-header {
+            background: #ededed;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border-bottom: 1px solid #d1d7db;
+        }
+        
+        .search-bar {
+            padding: 10px 20px;
+            background: #f6f6f6;
+            border-bottom: 1px solid #e0e0e0;
+            position: relative;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 10px 40px 10px 15px;
+            border: none;
+            border-radius: 20px;
+            background: white;
+            outline: none;
+            font-size: 14px;
+        }
+        
+        .search-clear-btn {
+            position: absolute;
+            right: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #667781;
+            cursor: pointer;
+            padding: 5px;
+            display: none;
+        }
+        
+        .search-clear-btn:hover {
+            color: #333;
+        }
+        
+        .conversation-list {
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        
+        .conversation-item {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .conversation-item:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .conversation-item.active {
+            background-color: #e9e9e9;
+        }
+        
+        .avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+            color: #666;
+        }
+        
+        .conversation-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .conversation-name {
+            font-weight: 500;
+            margin-bottom: 3px;
+            color: #111;
+        }
+        
+        .last-message {
+            color: #667781;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .conversation-time {
+            color: #667781;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #e5ddd5;
+            position: relative;
+        }
+
+        #chatArea {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .chat-header {
+            background: #ededed;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            border-bottom: 1px solid #d1d7db;
+        }
+
+        #typingIndicator {
+            font-style: italic;
+            display: none;
+            animation: blink 1.2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="chat-bg" patternUnits="userSpaceOnUse" width="100" height="100"><circle cx="50" cy="50" r="2" fill="%23ffffff" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23chat-bg)"/></svg>');
+            word-break: break-word;
+            white-space: pre-line;
+        }
+        
+        .message {
+            margin-bottom: 8px;
+            display: flex;
+            max-width: 100%;
+            min-width: 0; /* Allow flex items to shrink below content size */
+        }
+        
+        .message.sent {
+            margin-left: auto;
+            justify-content: flex-end;
+        }
+        
+        .message-bubble {
+            background: white;
+            padding: 4px 12px 2px 12px;
+            border-radius: 18px;
+            position: relative;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
+            max-width: 100%;
+            width: auto;
+            display: inline-block;
+        }
+        
+        .message.sent .message-bubble {
+            background: #dcf8c6;
+        }
+        
+        .message-time {
+            font-size: 11px;
+            color: #667781;
+            margin-top: 0;
+            margin-bottom: 0;
+            text-align: right;
+        }
+        
+        .message-input-area {
+            background: #f0f0f0;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            position: sticky;
+            bottom: 0;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            outline: none;
+            font-size: 15px;
+            background: white;
+        }
+        
+        .send-button {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #25D366;
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.2s;
+        }
+        
+        .send-button:hover {
+            background: #128C7E;
+        }
+        
+        .welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: #667781;
+        }
+        
+        .auth-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .auth-form {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            width: 400px;
+            max-width: 90%;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 16px;
+            outline: none;
+        }
+        
+        .form-input:focus {
+            border-color: #25D366;
+        }
+        
+        .form-button {
+            width: 100%;
+            padding: 15px;
+            background: #25D366;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .form-button:hover {
+            background: #128C7E;
+        }
+        
+        .new-chat-btn {
+            width: 50px;
+            height: 50px;
+            background: #25D366;
+            border: none;
+            border-radius: 50%;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+            margin: 15px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .new-chat-btn:hover {
+            background: #128C7E;
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .sidebar-footer {
+            padding: 10px 20px;
+            border-top: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #667781;
+        }
+        
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #25D366;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Mobile hamburger menu */
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: #667781;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+        }
+        
+        .mobile-back-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: #667781;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            margin-right: 10px;
+        }
+        
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        
+        /* Mobile responsive styles */
+        @media (max-width: 768px) {
+            .chat-container {
+                max-width: 100%;
+                box-shadow: none;
+            }
+            
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: 100%;
+                z-index: 1;
+                transform: translateX(0);
+                border-right: none;
+                box-shadow: none;
+            }
+            
+            .sidebar.mobile-hidden {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 85%;
+                z-index: 1000;
+                transform: translateX(-100%);
+                box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            }
+            
+            .sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            
+            .main-chat {
+                width: 100%;
+                display: none;
+            }
+            
+            .main-chat.mobile-active {
+                display: flex;
+            }
+            
+            .mobile-menu-btn {
+                display: block;
+            }
+            
+            .mobile-back-btn {
+                display: block;
+            }
+            
+            .chat-header {
+                padding: 0 15px;
+            }
+            
+            .message {
+                max-width: 85%;
+            }
+            
+            .messages-area {
+                padding: 15px;
+            }
+            
+            .message-input-area {
+                padding: 15px;
+            }
+            
+            .conversation-item {
+                padding: 12px 15px;
+            }
+            
+            .search-bar {
+                padding: 8px 15px;
+            }
+            
+            .sidebar-header {
+                padding: 0 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .message {
+                max-width: 100%;
+            }
+            .message-bubble {
+                padding: 3px 8px 1px 8px;
+                font-size: 14px;
+                max-width: 100%;
+                width: auto;
+                display: inline-block;
+            }
+            .message-time {
+                margin-top: 0;
+                margin-bottom: 0;
+            }
+            
+            .chat-header {
+                height: 60px;
+                padding: 0 10px;
+            }
+            
+            .sidebar-header {
+                height: 60px;
+                padding: 0 10px;
+            }
+            
+            .messages-area {
+                padding: 10px;
+            }
+            
+            .message-input-area {
+                padding: 10px;
+            }
+            
+            .conversation-item {
+                padding: 10px;
+            }
+            
+            .search-bar {
+                padding: 8px 10px;
+            }
+            
+            .avatar {
+                width: 40px;
+                height: 40px;
+                margin-right: 10px;
+            }
+            
+            .send-button {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .new-chat-btn {
+                width: 45px;
+                height: 45px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Authentication Modal -->
+    <div id="authModal" class="auth-modal">
+        <div class="auth-form">
+            <h2 class="text-2xl font-bold text-center mb-6">Welcome to Chat</h2>
+            <div id="loginForm">
+                <h3 class="text-lg font-semibold mb-4">Login</h3>
+                <input type="text" id="loginPhone" class="form-input" placeholder="Phone Number" required>
+                <input type="password" id="loginPassword" class="form-input" placeholder="Password" required>
+                <button onclick="login()" class="form-button">Login</button>
+                <p class="text-center mt-4">
+                    Don't have an account? 
+                    <a href="#" onclick="showRegister()" class="text-blue-500">Register</a>
+                </p>
+            </div>
+            
+            <div id="registerForm" style="display: none;">
+                <h3 class="text-lg font-semibold mb-4">Register</h3>
+                <input type="text" id="registerName" class="form-input" placeholder="Full Name" required>
+                <input type="text" id="registerPhone" class="form-input" placeholder="Phone Number" required>
+                <input type="password" id="registerPassword" class="form-input" placeholder="Password" required>
+                <button onclick="register()" class="form-button">Register</button>
+                <p class="text-center mt-4">
+                    Already have an account? 
+                    <a href="#" onclick="showLogin()" class="text-blue-500">Login</a>
+                </p>
+            </div>
+            
+            <div id="authError" class="text-red-500 text-center mt-4" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div id="chatContainer" class="chat-container" style="display: none;">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="flex items-center">
+                    <div class="avatar">
+                        <span id="userInitials">U</span>
+                    </div>
+                    <div class="ml-3">
+                        <div class="font-semibold" id="currentUserName">User</div>
+                        <div class="text-sm text-gray-500" id="connectionStatus">Connecting...</div>
+                    </div>
+                </div>
+                <button onclick="logout()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="search-bar">
+                <input type="text" class="search-input" placeholder="Search conversations..." id="searchInput" oninput="handleSearchInput(this.value)" onkeyup="handleSearchInput(this.value)">
+                <button class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="conversation-list" id="conversationList">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading conversations...
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <button class="new-chat-btn" onclick="showNewChatModal()" title="Start New Conversation">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Overlay -->
+        <div class="mobile-overlay" onclick="closeMobileSidebar()"></div>
+
+        <!-- Main Chat Area -->
+        <div class="main-chat">
+            <div id="welcomeScreen" class="welcome-screen">
+                <div class="text-6xl mb-4">💬</div>
+                <h2 class="text-2xl font-semibold mb-2">WhatsApp Web</h2>
+                <p class="text-gray-500 max-w-md">
+                    Select a conversation from the sidebar to start messaging.
+                </p>
+            </div>
+            
+            <div id="chatArea" style="display: none;">
+                <div class="chat-header">
+                    <button onclick="closeCurrentChat()" class="mobile-back-btn">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                        </svg>
+                    </button>
+                    <div class="avatar">
+                        <span id="chatContactInitials">C</span>
+                    </div>
+                    <div class="ml-3 flex-1">
+                        <div class="font-semibold" id="chatContactName">Contact</div>
+                        <div class="text-sm text-gray-500" id="chatContactStatus">Online</div>
+                        <div class="text-sm text-green-600" id="typingIndicator">Typing...</div>
+                    </div>
+                </div>
+                
+                <div class="messages-area" id="messagesArea">
+                    <!-- Messages will be loaded here -->
+                </div>
+                
+                <div class="message-input-area">
+                    <textarea class="message-input" id="messageInput" placeholder="Type a message..." rows="1" maxlength="2000" style="resize: none; overflow-y: auto; min-height: 40px; max-height: 120px;" oninput="autoGrow(this)" onkeydown="handleEnterKey(event)"></textarea>
+                    <button class="send-button" onclick="sendMessage()">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Chat Modal -->
+    <div id="newChatModal" class="auth-modal" style="display: none;">
+        <div class="auth-form">
+            <h3 class="text-lg font-semibold mb-4">Start New Conversation</h3>
+            <input type="text" id="newChatPhone" class="form-input" placeholder="Phone Number" required>
+            <input type="text" id="firstMessage" class="form-input" placeholder="First message..." required>
+            <div class="flex gap-2">
+                <button onclick="createNewChat()" class="form-button">Start Chat</button>
+                <button onclick="hideNewChatModal()" class="form-button" style="background: #ccc;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-grow textarea up to 5 lines
+        function autoGrow(element) {
+            element.style.height = '40px'; // min-height
+            const maxHeight = 120; // ~5 lines
+            if (element.scrollHeight > maxHeight) {
+                element.style.height = maxHeight + 'px';
+                element.style.overflowY = 'auto';
+            } else {
+                element.style.height = element.scrollHeight + 'px';
+                element.style.overflowY = 'hidden';
+            }
+        }
+        let socket;
+        let currentUser = null;
+        let currentConversation = null;
+        let conversations = [];
+        let filteredConversations = [];
+        let timerId;
+        let isTyping = false;
+        let authToken = localStorage.getItem('authToken');
+
+        // Search Functions
+        function handleSearchInput(searchTerm) {
+            const term = searchTerm.toLowerCase().trim();
+            const clearBtn = document.getElementById('searchClearBtn');
+            
+            console.log('Searching for:', term, 'Total conversations:', conversations.length);
+            
+            // Show/hide clear button
+            if (term === '') {
+                clearBtn.style.display = 'none';
+                filteredConversations = [...conversations]; // Create a copy
+            } else {
+                clearBtn.style.display = 'block';
+                // Filter conversations by participant name
+                filteredConversations = conversations.filter(conv => {
+                    if (!currentUser || !conv.participants) return false;
+                    
+                    const otherParticipant = conv.participants.find(p => p._id !== currentUser.id);
+                    const name = otherParticipant ? otherParticipant.name.toLowerCase() : '';
+                    const matches = name.includes(term);
+                    
+                    if (matches) {
+                        console.log('Found match:', name);
+                    }
+                    
+                    return matches;
+                });
+            }
+            
+            console.log('Filtered conversations:', filteredConversations.length);
+            renderConversations();
+        }
+
+        function handleSearch(searchTerm) {
+            // This function is used internally when conversations are updated
+            const term = searchTerm ? searchTerm.toLowerCase().trim() : '';
+            
+            if (term === '' || !currentUser) {
+                filteredConversations = [...conversations]; // Create a copy
+            } else {
+                filteredConversations = conversations.filter(conv => {
+                    if (!conv.participants) return false;
+                    
+                    const otherParticipant = conv.participants.find(p => p._id !== currentUser.id);
+                    const name = otherParticipant ? otherParticipant.name.toLowerCase() : '';
+                    return name.includes(term);
+                });
+            }
+        }
+
+        function clearSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const clearBtn = document.getElementById('searchClearBtn');
+            
+            searchInput.value = '';
+            clearBtn.style.display = 'none';
+            filteredConversations = [...conversations]; // Create a copy
+            renderConversations();
+            searchInput.focus();
+        }
+
+        // Authentication Functions
+        function showLogin() {
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('registerForm').style.display = 'none';
+            hideAuthError();
+        }
+
+        function showRegister() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('registerForm').style.display = 'block';
+            hideAuthError();
+        }
+
+        function showAuthError(message) {
+            const errorDiv = document.getElementById('authError');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideAuthError() {
+            document.getElementById('authError').style.display = 'none';
+        }
+
+        async function login() {
+            const phone = document.getElementById('loginPhone').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+
+            if (!phone || !password) {
+                showAuthError('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ phone, password }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('authToken', authToken);
+                    initializeChat();
+                } else {
+                    showAuthError(data.message || 'Login failed');
+                }
+            } catch (error) {
+                showAuthError('Network error. Please try again.');
+            }
+        }
+
+        async function register() {
+            const name = document.getElementById('registerName').value.trim();
+            const phone = document.getElementById('registerPhone').value.trim();
+            const password = document.getElementById('registerPassword').value.trim();
+
+            if (!name || !phone || !password) {
+                showAuthError('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, phone, password }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    setTimeout(() => {
+                        showLogin();
+                    }, 2000);
+                } else {
+                    showAuthError(data.message || 'Registration failed');
+                }
+            } catch (error) {
+                showAuthError('Network error. Please try again.');
+            }
+        }
+
+        function logout() {
+            // Leave current conversation before logout
+            if (currentConversation && socket) {
+                socket.emit('leave conversation', {
+                    conversationID: currentConversation._id
+                });
+            }
+            
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
+            currentConversation = null;
+            
+            if (socket) {
+                socket.disconnect();
+            }
+            document.getElementById('authModal').style.display = 'flex';
+            document.getElementById('chatContainer').style.display = 'none';
+        }
+
+        // Chat Functions
+        function initializeChat() {
+            document.getElementById('authModal').style.display = 'none';
+            document.getElementById('chatContainer').style.display = 'flex';
+            
+            // Update user info
+            document.getElementById('currentUserName').textContent = currentUser.name;
+            document.getElementById('userInitials').textContent = getInitials(currentUser.name);
+            
+            // Initialize Socket.io
+            socket = io({
+                extraHeaders: {
+                    token: authToken
+                }
+            });
+            if(socket.connected == false)
+                showAuthError('Socket connection failed');
+            
+            setupSocketListeners();
+
+            initializeTypingIndicator();
+
+            loadConversations();
+            
+            // Initialize mobile view if on mobile device
+            if (window.innerWidth <= 768) {
+                showMobileSidebar();
+            }
+        }
+
+        function setupSocketListeners() {
+            socket.on('connect', () => {
+                document.getElementById('connectionStatus').textContent = 'Online';
+                document.getElementById('connectionStatus').style.color = '#25D366';
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('connectionStatus').textContent = 'Offline';
+                document.getElementById('connectionStatus').style.color = '#dc3545';
+            });
+
+            socket.on('message', (data) => {
+                handleIncomingMessage(data);
+            });
+
+            socket.on('user status', (data) => {
+                handleUserStatusUpdate(data);
+            });
+
+            socket.on('update status', (data) => {
+                handleUserStatusUpdate(data);
+            });
+
+            socket.on('update last message', (data) => {
+                handleLastMessageUpdate(data);
+            });
+
+            socket.on('new conversation', (data) => {
+                handleNewConversation(data);
+            });
+
+            socket.on('typing', ({conversationID, user}) => {
+                console.log('Received typing event:', conversationID, user.name);
+                
+                // Only show typing if it's for the current active conversation
+                if (currentConversation && conversationID === currentConversation._id.toString()) {
+                    const typingField = document.getElementById('typingIndicator');
+                    if (typingField) {
+                        typingField.innerText = `${user.name} is typing...`;
+                        typingField.style.display = 'block';
+                    }
+                }
+            });
+
+            socket.on('stopTyping', ({conversationID, user}) => {
+                console.log('Received stopTyping event:', conversationID, user.name);
+                
+                // Only hide typing if it's for the current active conversation
+                if (currentConversation && conversationID === currentConversation._id.toString()) {
+                    const typingField = document.getElementById('typingIndicator');
+                    if (typingField) {
+                        typingField.innerText = '';
+                        typingField.style.display = 'none';
+                    }
+                }
+            });
+
+            socket.on('connect_error', (error) => {
+                console.error('Connection error:', error);
+                if (error.message === 'Authentication error') {
+                    logout();
+                }
+            });
+
+            socket.on('err', (error) => {
+                console.error('Socket error:', error);
+                alert(error.message || 'An error occurred');
+            });
+        }
+
+        async function loadConversations() {
+            try {
+                const response = await fetch('/api/conversation', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    conversations = data.conversations || [];
+                    filteredConversations = [...conversations]; // Initialize with copy of conversations
+                    renderConversations();
+                } else {
+                    console.error('Failed to load conversations');
+                }
+            } catch (error) {
+                console.error('Error loading conversations:', error);
+            }
+        }
+
+        function initializeTypingIndicator() {
+            const messageField = document.getElementById('messageInput');
+            
+            if (messageField) {
+                messageField.addEventListener('input', (e) => {
+                    console.log('Input event - Current conversation:', currentConversation?._id, 'User:', currentUser?.name);
+                    
+                    // Check if we have required data and socket connection
+                    if (!currentConversation || !currentUser || !socket || !socket.connected) {
+                        console.log('Missing requirements for typing indicator');
+                        return;
+                    }
+
+                    const value = e.target.value.trim();
+                    
+                    // If input is empty, stop typing immediately
+                    if (value === '') {
+                        if (isTyping) {
+                            console.log('Input empty - stopping typing');
+                            isTyping = false;
+                            clearTimeout(timerId);
+                            socket.emit('stopTyping', {
+                                conversationID: currentConversation._id.toString()
+                            });
+                        }
+                        return;
+                    }
+
+                    // Start typing if not already typing
+                    if (!isTyping) {
+                        console.log('Starting typing for conversation:', currentConversation._id);
+                        isTyping = true;
+                        socket.emit('typing', {
+                            conversationID: currentConversation._id.toString()
+                        });
+                    }
+
+                    // Reset the timer
+                    clearTimeout(timerId);
+                    timerId = setTimeout(() => {
+                        console.log('Typing timeout - stopping typing');
+                        isTyping = false;
+                        socket.emit('stopTyping', {
+                            conversationID: currentConversation._id.toString()
+                        });
+                    }, 3000);
+                });
+
+                // Also handle when user leaves the input field
+                messageField.addEventListener('blur', () => {
+                    if (isTyping && currentConversation && socket && socket.connected) {
+                        console.log('Input blur - stopping typing');
+                        isTyping = false;
+                        clearTimeout(timerId);
+                        socket.emit('stopTyping', {
+                            conversationID: currentConversation._id.toString()
+                        });
+                    }
+                });
+            }
+        }
+
+        function renderConversations() {
+            const listElement = document.getElementById('conversationList');
+            
+            if (!currentUser || conversations.length === 0) {
+                listElement.innerHTML = '<div class="text-center p-4 text-gray-500">No conversations yet</div>';
+                return;
+            }
+
+            // Use filteredConversations array for display
+            const conversationsToShow = filteredConversations;
+
+            if (conversationsToShow.length === 0 && document.getElementById('searchInput').value.trim() !== '') {
+                listElement.innerHTML = '<div class="text-center p-4 text-gray-500">No conversations found</div>';
+                return;
+            }
+
+            // Escape HTML utility
+            function escapeHTML(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+            listElement.innerHTML = conversationsToShow.map(conv => {
+                const otherParticipant = conv.participants.find(p => p._id !== currentUser.id);
+                const name = otherParticipant ? escapeHTML(otherParticipant.name) : 'Unknown';
+                const lastMessage = conv.lastMessage ? escapeHTML(conv.lastMessage.content) : 'No messages yet';
+                const time = conv.updatedAt ? escapeHTML(formatTime(conv.updatedAt)) : '';
+                return `
+                    <div class="conversation-item ${currentConversation && currentConversation._id === conv._id ? 'active' : ''}" 
+                        onclick="selectConversationMobile('${conv._id}')">
+                        <div class="avatar">
+                            <span>${getInitials(name)}</span>
+                        </div>
+                        <div class="conversation-info">
+                            <div class="conversation-name">${name}</div>
+                            <div class="last-message">${lastMessage}</div>
+                        </div>
+                        <div class="conversation-time">${time}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        async function selectConversation(conversationId) {
+            const conversation = conversations.find(c => c._id === conversationId);
+            if (!conversation) return;
+
+            // CLEAR TYPING INDICATOR when switching conversations
+            const typingField = document.getElementById('typingIndicator');
+            if (typingField) {
+                typingField.innerText = '';
+                typingField.style.display = 'none';
+            }
+
+            // Stop typing for current conversation if switching
+            if (isTyping && currentConversation && currentConversation._id !== conversationId) {
+                isTyping = false;
+                clearTimeout(timerId);
+                socket.emit('stopTyping', {
+                    conversationID: currentConversation._id.toString()
+                });
+            }
+            // Leave current conversation if any
+            if (currentConversation && currentConversation._id !== conversationId) {
+                socket.emit('leave conversation', {
+                    conversationID: currentConversation._id
+                });
+                console.log(`Left conversation: ${currentConversation._id}`);
+            }
+
+            currentConversation = conversation;
+            
+            // Enter new conversation
+            socket.emit('enter conversation', {
+                conversationID: conversationId
+            });
+            console.log(`Entered conversation: ${conversationId}`);
+            
+            // Update UI
+            document.getElementById('welcomeScreen').style.display = 'none';
+            document.getElementById('chatArea').style.display = 'flex';
+            
+            const otherParticipant = conversation.participants.find(p => p._id !== currentUser.id);
+            document.getElementById('chatContactName').textContent = otherParticipant ? otherParticipant.name : 'Unknown';
+            document.getElementById('chatContactInitials').textContent = getInitials(otherParticipant ? otherParticipant.name : 'Unknown');
+            
+            // Set initial status based on participant data
+            if (otherParticipant) {
+                if (otherParticipant.isOnline) {
+                    updateChatContactStatus('online');
+                } else {
+                    updateChatContactStatus('offline', otherParticipant.lastSeen);
+                }
+                
+                // Request real-time status of the other participant
+                socket.emit('get status', { userID: otherParticipant._id });
+            }
+            
+            // Load messages for this conversation
+            await loadMessages(conversationId);
+            
+            // Re-render conversations to update active state
+            renderConversations();
+        }
+
+        // load and render messages for the selected conversation
+        async function loadMessages(conversationId) {
+            try {
+                const response = await fetch(`/api/message/${conversationId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    renderMessages(data.messages || []);
+                } else {
+                    console.error('Failed to load messages');
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+            }
+        }
+
+        function renderMessages(messages) {
+            const messagesArea = document.getElementById('messagesArea');
+            
+            // Escape HTML utility
+            function escapeHTML(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+            messagesArea.innerHTML = messages.map(message => {
+                const isSent = message.sender._id === currentUser.id;
+                const time = formatTime(message.createdAt);
+                return `
+                    <div class="message ${isSent ? 'sent' : ''}">
+                        <div class="message-bubble" style="display: flex; flex-direction: column; align-items: flex-start;">
+                            <span style="white-space: pre-line; width: 100%;">${escapeHTML(message.content)}</span>
+                            <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${escapeHTML(time)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Scroll to bottom
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+
+        // Message sending and receiving
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            if (!content || !currentConversation) return;
+            socket.emit('message', {
+                conversationID: currentConversation._id,
+                message: content
+            });
+            addMessageToUI(content, true);
+            input.value = '';
+            autoGrow(input);
+        }
+
+        function handleIncomingMessage(data) {            
+            // Check if message is for current conversation
+            if (currentConversation && data.conversationID === currentConversation._id) {
+                // Add message to UI if in the same conversation
+                const messageContent = data.message.content;
+                const isFromCurrentUser = data.message.sender === currentUser.id;
+
+                if (!isFromCurrentUser) {
+                    addMessageToUI(messageContent, false);
+                }
+            }
+        }
+
+        function handleUserStatusUpdate(data) {
+            console.log('Status update received:', data);
+            
+            // Update status in current conversation if it matches
+            if (currentConversation) {
+                const otherParticipant = currentConversation.participants.find(p => p._id !== currentUser.id);
+                if (otherParticipant && otherParticipant._id === data.userID) {
+                    console.log('Updating participant status:', {
+                        participantName: otherParticipant.name,
+                        newStatus: data.status,
+                        newLastSeen: data.lastSeen,
+                        oldLastSeen: otherParticipant.lastSeen
+                    });
+                    
+                    // Update participant data with fresh data from backend
+                    otherParticipant.isOnline = data.status === 'online';
+                    
+                    if (data.status === 'online') {
+                        // User came online - clear lastSeen
+                        otherParticipant.lastSeen = null;
+                        updateChatContactStatus('online');
+                    } else {
+                        // User went offline - use fresh lastSeen from backend
+                        otherParticipant.lastSeen = data.lastSeen;
+                        updateChatContactStatus('offline', data.lastSeen);
+                    }
+                }
+            }
+        }
+
+        function handleLastMessageUpdate(data) {
+            // Find the conversation in our local conversations array
+            const conversationIndex = conversations.findIndex(conv => conv._id === data.conversationID);
+            
+            if (conversationIndex !== -1) {
+                // Update the last message and timestamp
+                conversations[conversationIndex].lastMessage = {
+                    content: data.message.content,
+                    sender: data.message.sender,
+                    createdAt: data.message.createdAt
+                };
+                conversations[conversationIndex].updatedAt = data.message.createdAt;
+                
+                // Sort conversations by most recent message
+                conversations.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+                
+                // Update filtered conversations with current search
+                const searchTerm = document.getElementById('searchInput').value;
+                handleSearch(searchTerm);
+                
+                // Re-render the conversation list to show updated last message
+                renderConversations();
+                
+                // Note: Don't add message to UI here - it's handled by 'message' event
+                // This event is only for updating the conversation list
+            }
+        }
+
+        function handleNewConversation(conversation) {
+            // Check if conversation already exists in our array
+            const existingIndex = conversations.findIndex(conv => conv._id === conversation._id);
+            
+            if (existingIndex === -1) {
+                // Add new conversation to the top of the list
+                conversations.unshift(conversation);
+                
+                // Update filtered conversations with current search
+                const searchTerm = document.getElementById('searchInput').value;
+                handleSearch(searchTerm);
+                
+                // Re-render the conversation list
+                renderConversations();
+                
+                console.log('Added new conversation to the top of the list');
+            } else {
+                console.log('Conversation already exists, not adding duplicate');
+            }
+        }
+
+        function updateChatContactStatus(status, lastSeen) {
+            const statusElement = document.getElementById('chatContactStatus');
+            if (status === 'online') {
+                statusElement.textContent = 'Online';
+                statusElement.style.color = '#25D366';
+            } else {
+                if (lastSeen) {
+                    const lastSeenDate = new Date(lastSeen);
+                    const now = new Date();
+                    const diffMinutes = Math.floor((now - lastSeenDate) / (1000 * 60));
+                    
+                    console.log('Updating last seen:', {
+                        lastSeen,
+                        lastSeenDate,
+                        now,
+                        diffMinutes
+                    });
+                    
+                    let lastSeenText;
+                    if (diffMinutes < 1) {
+                        lastSeenText = 'Last seen just now';
+                    } else if (diffMinutes < 60) {
+                        lastSeenText = `Last seen ${diffMinutes} minute${diffMinutes > 1 ? 's' : ''} ago`;
+                    } else if (diffMinutes < 1440) {
+                        const hours = Math.floor(diffMinutes / 60);
+                        lastSeenText = `Last seen ${hours} hour${hours > 1 ? 's' : ''} ago`;
+                    } else {
+                        lastSeenText = `Last seen ${lastSeenDate.toLocaleDateString()}`;
+                    }
+                    
+                    statusElement.textContent = lastSeenText;
+                } else {
+                    statusElement.textContent = 'Offline';
+                }
+                statusElement.style.color = '#667781';
+            }
+        }
+
+        function addMessageToUI(content, isSent) {
+            const messagesArea = document.getElementById('messagesArea');
+            const time = formatTime(new Date());
+            // Escape HTML utility
+            function escapeHTML(str) {
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : ''}`;
+            messageDiv.innerHTML = `
+                <div class="message-bubble" style="display: flex; flex-direction: column; align-items: flex-start;">
+                    <span style="white-space: pre-line; width: 100%;">${escapeHTML(content)}</span>
+                    <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${escapeHTML(time)}</span>
+                </div>
+            `;
+            messagesArea.appendChild(messageDiv);
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+
+        function handleEnterKey(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // New Chat Functions
+        function showNewChatModal() {
+            document.getElementById('newChatModal').style.display = 'flex';
+        }
+
+        function hideNewChatModal() {
+            document.getElementById('newChatModal').style.display = 'none';
+            document.getElementById('newChatPhone').value = '';
+            document.getElementById('firstMessage').value = '';
+        }
+
+        function closeCurrentChat() {
+            // Stop typing and clear timer
+            if (isTyping && currentConversation && socket && socket.connected) {
+                isTyping = false;
+                clearTimeout(timerId);
+                socket.emit('stopTyping', {
+                    conversationID: currentConversation._id.toString()
+                });
+            }
+            if (currentConversation && socket) {
+                socket.emit('leave conversation', {
+                    conversationID: currentConversation._id
+                });
+                console.log(`Left conversation: ${currentConversation._id}`);
+            }
+            currentConversation = null;
+            // Hide typing indicator
+            const typingField = document.getElementById('typingIndicator');
+            if (typingField) {
+                typingField.style.display = 'none';
+                typingField.innerText = '';
+            }
+            document.getElementById('welcomeScreen').style.display = 'flex';
+            document.getElementById('chatArea').style.display = 'none';
+            renderConversations(); // Update conversation list to remove active state
+            
+            // On mobile, return to sidebar view
+            if (window.innerWidth <= 768) {
+                showMobileSidebar();
+            }
+        }
+
+        // Mobile responsive functions
+        function toggleMobileSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.querySelector('.mobile-overlay');
+            
+            if (window.innerWidth <= 768) {
+                sidebar.classList.toggle('mobile-open');
+                
+                if (sidebar.classList.contains('mobile-open')) {
+                    overlay.style.display = 'block';
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    overlay.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+            }
+        }
+
+        function closeMobileSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            const overlay = document.querySelector('.mobile-overlay');
+            
+            if (window.innerWidth <= 768) {
+                sidebar.classList.remove('mobile-open');
+                overlay.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        }
+
+        function showMobileChat() {
+            if (window.innerWidth <= 768) {
+                const sidebar = document.querySelector('.sidebar');
+                const mainChat = document.querySelector('.main-chat');
+                
+                sidebar.classList.add('mobile-hidden');
+                mainChat.classList.add('mobile-active');
+            }
+        }
+
+        function showMobileSidebar() {
+            if (window.innerWidth <= 768) {
+                const sidebar = document.querySelector('.sidebar');
+                const mainChat = document.querySelector('.main-chat');
+                
+                sidebar.classList.remove('mobile-hidden');
+                mainChat.classList.remove('mobile-active');
+            }
+        }
+
+        // Update selectConversation to handle mobile view
+        function selectConversationMobile(conversationId) {
+            selectConversation(conversationId);
+            // On mobile, show chat view and hide sidebar
+            if (window.innerWidth <= 768) {
+                showMobileChat();
+            }
+        }
+
+        async function createNewChat() {
+            const phone = document.getElementById('newChatPhone').value.trim();
+            const message = document.getElementById('firstMessage').value.trim();
+
+            if (!phone || !message) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/conversation/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                    body: JSON.stringify({ type : "private", phone, messageContent: message }),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    hideNewChatModal();
+                    
+                    // Reload conversations to get the new one
+                    await loadConversations();
+                    
+                    // Select the new conversation
+                    if (data.conversation && data.conversation._id) {
+                        setTimeout(() => selectConversation(data.conversation._id), 500);
+                    }
+                } else {
+                    const error = await response.json();
+                    alert(error.msg || error.message || 'Failed to create conversation');
+                }
+            } catch (error) {
+                console.error('Error creating chat:', error);
+                alert('Network error. Please try again.');
+            }
+        }
+
+        // Utility Functions
+        function getInitials(name) {
+            return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+        }
+
+        function formatTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Initialize app
+        window.onload = function() {
+            authToken = localStorage.getItem('authToken');
+            if (authToken) {
+                // Verify token and initialize
+                fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                    },
+                })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error('Invalid token');
+                    }
+                })
+                .then(data => {
+                    currentUser = data.user;
+                    initializeChat();
+                })
+                .catch(() => {
+                    localStorage.removeItem('authToken');
+                    authToken = null;
+                });
+            }
+        };
+
+        // Mobile event listeners
+        document.addEventListener('click', function(event) {
+            const sidebar = document.querySelector('.sidebar');
+            
+            // Close sidebar when clicking outside on mobile
+            if (window.innerWidth <= 768 && 
+                sidebar.classList.contains('mobile-open') && 
+                !sidebar.contains(event.target)) {
+                closeMobileSidebar();
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.querySelector('.sidebar');
+            const mainChat = document.querySelector('.main-chat');
+            const overlay = document.querySelector('.mobile-overlay');
+            
+            if (window.innerWidth > 768) {
+                // Desktop view - reset mobile classes
+                sidebar.classList.remove('mobile-open', 'mobile-hidden');
+                mainChat.classList.remove('mobile-active');
+                overlay.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            } else {
+                // Mobile view - show sidebar by default if no conversation is selected
+                if (!currentConversation) {
+                    showMobileSidebar();
+                }
+            }
+        });
+    </script>
+</body>
+</html>
