@@ -181,17 +181,19 @@
             overflow-y: auto;
             padding: 20px;
             background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="chat-bg" patternUnits="userSpaceOnUse" width="100" height="100"><circle cx="50" cy="50" r="2" fill="%23ffffff" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23chat-bg)"/></svg>');
-            word-break: break-word;
-            white-space: pre-line;
+            /* word-break: break-word;
+            white-space: pre-line; */
         }
         
         .message {
-            margin-bottom: 8px;
+            margin-bottom: 5px;
+            margin: 0px;
             display: flex;
             max-width: 100%;
             min-width: 0; /* Allow flex items to shrink below content size */
         }
         
+        /* message to right and another to left */
         .message.sent {
             margin-left: auto;
             justify-content: flex-end;
@@ -209,18 +211,29 @@
             max-width: 100%;
             width: auto;
             display: inline-block;
+            margin-bottom: 5px;
         }
         
         .message.sent .message-bubble {
             background: #dcf8c6;
         }
         
+        .message-meta {
+            display: flex;          
+            align-items: center;    
+            justify-content: flex-end;
+            gap: 4px;
+            align-self: flex-end;
+        }
+
         .message-time {
             font-size: 11px;
             color: #667781;
-            margin-top: 0;
-            margin-bottom: 0;
-            text-align: right;
+        }
+
+        .status-check {
+            font-size: 11px;
+            color: black;
         }
         
         .message-input-area {
@@ -498,10 +511,6 @@
                 width: auto;
                 display: inline-block;
             }
-            .message-time {
-                margin-top: 0;
-                margin-bottom: 0;
-            }
             
             .chat-header {
                 height: 60px;
@@ -654,8 +663,8 @@
                         <div class="text-sm text-green-600" id="typingIndicator">Typing...</div>
                     </div>
                 </div>
-                
-                <div class="messages-area" id="messagesArea">
+
+                <div class="messages-area messagesArea">
                     <!-- Messages will be loaded here -->
                 </div>
                 
@@ -685,6 +694,16 @@
     </div>
 
     <script>
+        
+        let socket;
+        let currentUser = null;
+        let currentConversation = null;
+        let conversations = [];
+        let filteredConversations = [];
+        let timerId;
+        let isTyping = false;
+        let authToken = localStorage.getItem('authToken');
+
         // Auto-grow textarea up to 5 lines
         function autoGrow(element) {
             element.style.height = '40px'; // min-height
@@ -697,14 +716,6 @@
                 element.style.overflowY = 'hidden';
             }
         }
-        let socket;
-        let currentUser = null;
-        let currentConversation = null;
-        let conversations = [];
-        let filteredConversations = [];
-        let timerId;
-        let isTyping = false;
-        let authToken = localStorage.getItem('authToken');
 
         // Search Functions
         function handleSearchInput(searchTerm) {
@@ -917,8 +928,9 @@
                 document.getElementById('connectionStatus').style.color = '#dc3545';
             });
 
-            socket.on('message', (data) => {
-                handleIncomingMessage(data);
+            socket.on('message', ({message}) => {
+                console.log('Received message:', message);
+                handleIncomingMessage(message);
             });
 
             socket.on('user status', (data) => {
@@ -929,8 +941,8 @@
                 handleUserStatusUpdate(data);
             });
 
-            socket.on('update last message', (data) => {
-                handleLastMessageUpdate(data);
+            socket.on('update last message', ({message}) => {
+                handleLastMessageUpdate(message);
             });
 
             socket.on('new conversation', (data) => {
@@ -963,10 +975,31 @@
                 }
             });
 
-            socket.on('connect_error', (error) => {
-                console.error('Connection error:', error);
-                if (error.message === 'Authentication error') {
-                    logout();
+            socket.on('update message status', ({randomId, message}) => {
+                console.log('Received update message status event:', randomId, message);
+                const messageElement = document.getElementById(`message-${randomId}`);
+                if (messageElement) {
+                    messageElement.id = `message-${message._id}`;
+                    messageElement.querySelector('.status-check').textContent = '✔';
+                }
+            });
+
+            socket.on('message read', (messageId) => {
+                console.log('Received message read event:', messageId);
+                const messageElement = document.getElementById(`message-${messageId}`);
+                if (messageElement) {
+                    messageElement.querySelector('.status-check').textContent = '✔✔';
+                }
+            });
+
+            socket.on('update messages status', (conversationId) => {
+                console.log('Received update messages status event:', conversationId);
+                const conversation = document.getElementById(`conversation-${conversationId}`);
+                if (conversation) {
+                    const messages = conversation.querySelectorAll('.message.sent');
+                    messages.forEach((message) => {
+                        message.querySelector('.status-check').textContent = '✔✔';
+                    });
                 }
             });
 
@@ -1187,25 +1220,20 @@
         }
 
         function renderMessages(messages) {
-            const messagesArea = document.getElementById('messagesArea');
-            
-            // Escape HTML utility
-            function escapeHTML(str) {
-                return String(str)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#39;');
-            }
+            const messagesArea = document.querySelector('.messagesArea');
+            messagesArea.id = `conversation-${messages[0].conversationID}`;
             messagesArea.innerHTML = messages.map(message => {
                 const isSent = message.sender._id === currentUser.id;
                 const time = formatTime(message.createdAt);
+                const status = message.status === 'sent' ? '✔' : message.status === 'read' ? '✔✔' : '';
                 return `
-                    <div class="message ${isSent ? 'sent' : ''}">
+                    <div class="message ${isSent ? 'sent' : ''}" id="message-${message._id}">
                         <div class="message-bubble" style="display: flex; flex-direction: column; align-items: flex-start;">
                             <span style="white-space: pre-line; width: 100%;">${escapeHTML(message.content)}</span>
-                            <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${escapeHTML(time)}</span>
+                            <div class="message-meta">
+                                <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${escapeHTML(time)}</span>
+                                <span class="status-check" style="align-self: flex-end; color: black; display: inline;">${currentUser.id === message.sender._id ? status : ''}</span>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -1213,6 +1241,12 @@
             
             // Scroll to bottom
             messagesArea.scrollTop = messagesArea.scrollHeight;
+
+            // update messages status
+            const len = messages.length;
+            if(messages[len - 1].status === 'sent' && messages[len - 1].sender.toString() !== currentUser.id) {
+                socket.emit('update messages status' , {conversationId : messages[0].conversationID.toString()})
+            }
         }
 
         // Message sending and receiving
@@ -1220,25 +1254,34 @@
             const input = document.getElementById('messageInput');
             const content = input.value.trim();
             if (!content || !currentConversation) return;
+            
+            const randomId = Math.random().toString(36).substring(2, 15);
+            
             socket.emit('message', {
                 conversationID: currentConversation._id,
-                message: content
+                message: content,
+                randomId
             });
-            addMessageToUI(content, true);
+
+            const data = {
+                content,
+                sender: currentUser.id,
+                createdAt: new Date(),
+                _id: randomId,
+                status: 'pending'
+            };
+            addMessageToUI(data, true);
             input.value = '';
             autoGrow(input);
         }
 
-        function handleIncomingMessage(data) {            
+        function handleIncomingMessage(message) {
             // Check if message is for current conversation
-            if (currentConversation && data.conversationID === currentConversation._id) {
+            if (currentConversation && message.conversationID === currentConversation._id) {
                 // Add message to UI if in the same conversation
-                const messageContent = data.message.content;
-                const isFromCurrentUser = data.message.sender === currentUser.id;
+                const isFromCurrentUser = message.sender === currentUser.id;
 
-                if (!isFromCurrentUser) {
-                    addMessageToUI(messageContent, false);
-                }
+                addMessageToUI(message, isFromCurrentUser);
             }
         }
 
@@ -1272,19 +1315,19 @@
             }
         }
 
-        function handleLastMessageUpdate(data) {
+        function handleLastMessageUpdate(message) {
             // Find the conversation in our local conversations array
-            const conversationIndex = conversations.findIndex(conv => conv._id === data.conversationID);
-            
+            const conversationIndex = conversations.findIndex(conv => conv._id === message.conversationID);
+
             if (conversationIndex !== -1) {
                 // Update the last message and timestamp
                 conversations[conversationIndex].lastMessage = {
-                    content: data.message.content,
-                    sender: data.message.sender,
-                    createdAt: data.message.createdAt
+                    content: message.content,
+                    sender: message.sender,
+                    createdAt: message.createdAt
                 };
-                conversations[conversationIndex].updatedAt = data.message.createdAt;
-                
+                conversations[conversationIndex].updatedAt = message.createdAt;
+
                 // Sort conversations by most recent message
                 conversations.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
                 
@@ -1359,26 +1402,37 @@
             }
         }
 
-        function addMessageToUI(content, isSent) {
-            const messagesArea = document.getElementById('messagesArea');
-            const time = formatTime(new Date());
-            // Escape HTML utility
-            function escapeHTML(str) {
-                return String(str)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#39;');
-            }
+        // Escape HTML utility
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function addMessageToUI(message, isSent) {
+            const messagesArea = document.querySelector('.messagesArea');
+            const time = formatTime(message.createdAt || new Date());
+
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isSent ? 'sent' : ''}`;
+            messageDiv.id = `message-${message._id}`;
+            const status = message.status === 'sent' ? '✔' : message.status === 'read' ? '✔✔' : '';
             messageDiv.innerHTML = `
                 <div class="message-bubble" style="display: flex; flex-direction: column; align-items: flex-start;">
-                    <span style="white-space: pre-line; width: 100%;">${escapeHTML(content)}</span>
-                    <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${escapeHTML(time)}</span>
+                    <span style="white-space: pre-line; width: 100%;">${escapeHTML(message.content)}</span>
+                    <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${time}</span>
+                    <span class="status-check" style="align-self: flex-end; color: black;">${ currentUser.id === message.sender ? status : ''}</span>
                 </div>
             `;
+            if(currentUser.id !== message.sender.toString()){
+                console.log('Emitting message read for message:', message._id);
+                socket.emit('message read', {
+                    messageId: message._id
+                });
+            }
             messagesArea.appendChild(messageDiv);
             messagesArea.scrollTop = messagesArea.scrollHeight;
         }

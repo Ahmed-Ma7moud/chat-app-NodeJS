@@ -6,9 +6,9 @@ const xss = require('xss');
 module.exports = (socket, io) => {
   // Handle sending messages
   socket.on('message', async (data) => {
-    let { conversationID, message } = data;
+    let { conversationID, message , randomId} = data;
 
-    if (!conversationID || !message) {
+    if (!conversationID || !message || !randomId) {
       return socket.emit('err', 'Invalid message data');
     }
 
@@ -44,30 +44,29 @@ module.exports = (socket, io) => {
         content: message,
         sender: socket.user.id,
       });
-      await newMessage.save();
+      const createdMessage = await newMessage.save();
+      if(!createdMessage){
+        return socket.emit('err', 'Server can not create new messages now');
+      }
+
+      // send acknowledgement to sender that the message has received
+      socket.emit("update message status", {
+        randomId,
+        message: createdMessage
+      });
+      
+      // Send the message to all users in the conversation
+      socket.to(conversationID.toString()).emit('message', {
+        message: createdMessage
+      });
 
       // Update last message for online users
       conversation.participants.forEach(participant => {
         if (onlineUsers.isUserOnline(participant.toString())) {
           const participantSocketId = onlineUsers.getSocketId(participant.toString());
           io.to(participantSocketId).emit('update last message', {
-            conversationID,
-            message: {
-              content: message,
-              sender: socket.user.id,
-              createdAt: newMessage.createdAt,
-            }
+            message: createdMessage
           });
-        }
-      });
-      
-      // Send the message to all users in the conversation
-      socket.to(conversationID.toString()).emit('message', {
-        conversationID,
-        message: {
-          content: message,
-          sender: socket.user.id,
-          createdAt: newMessage.createdAt,
         }
       });
     } catch (error) {
