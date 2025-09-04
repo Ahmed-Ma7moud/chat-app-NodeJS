@@ -966,7 +966,8 @@
 
             socket.on('update last message', async ({message}) => {
                 // Play sound if message is from another user
-                playMessageSound();
+                if(message.sender.toString() !== currentUser.id.toString())
+                    playMessageSound();
                 // check if the conversation is exist in the list
                 const exist = document.getElementById(`${message.conversationID}`);
                 if(!exist){
