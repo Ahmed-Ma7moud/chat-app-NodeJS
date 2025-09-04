@@ -557,6 +557,8 @@
     </style>
 </head>
 <body>
+    <!-- Notification Sound -->
+    <audio id="messageSound" src="notification_sound.wav" preload="auto" style="display:none;"></audio>
     <!-- Authentication Modal -->
     <div id="authModal" class="auth-modal">
         <div class="auth-form">
@@ -703,7 +705,19 @@
         let timerId;
         let isTyping = false;
         let authToken = localStorage.getItem('authToken');
-
+        let maxMessages = 30;
+        let maxConversations = 20;
+        let paginationToken = null;
+        
+            // Escape HTML utility
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
         // Auto-grow textarea up to 5 lines
         function autoGrow(element) {
             element.style.height = '40px'; // min-height
@@ -715,6 +729,15 @@
                 element.style.height = element.scrollHeight + 'px';
                 element.style.overflowY = 'hidden';
             }
+        }
+
+        function playMessageSound() {
+            const audio = document.getElementById("messageSound");
+            // Reset to start in case multiple messages arrive quickly
+            audio.currentTime = 0;
+            audio.play().catch(err => {
+            console.log("Autoplay prevented by browser:", err);
+            });
         }
 
         // Search Functions
@@ -941,8 +964,30 @@
                 handleUserStatusUpdate(data);
             });
 
-            socket.on('update last message', ({message}) => {
-                handleLastMessageUpdate(message);
+            socket.on('update last message', async ({message}) => {
+                // Play sound if message is from another user
+                playMessageSound();
+                // check if the conversation is exist in the list
+                const exist = document.getElementById(`${message.conversationID}`);
+                if(!exist){
+                    try{
+                        const response = await fetch(`/api/conversation/${message.conversationID}`,{ 
+                                headers: {
+                                    'Authorization': `Bearer ${authToken}`,
+                                },
+                            });
+                        if(response.ok){
+                            const data = await response.json();
+                            conversations.unshift(data.conversation);
+                            filteredConversations.unshift(data.conversation)
+                            renderConversations();
+                        }
+                    }catch(err){
+                        console.error('Failed to fetch new conversation:', err);
+                    }
+                }else{
+                    handleLastMessageUpdate(message);
+                }
             });
 
             socket.on('new conversation', (data) => {
@@ -995,11 +1040,14 @@
             socket.on('update messages status', (conversationId) => {
                 console.log('Received update messages status event:', conversationId);
                 const conversation = document.getElementById(`conversation-${conversationId}`);
+                console.log(document.querySelector('.messages-area').id);
                 if (conversation) {
                     const messages = conversation.querySelectorAll('.message.sent');
                     messages.forEach((message) => {
                         message.querySelector('.status-check').textContent = '✔✔';
                     });
+                }else{
+                    console.warn('Conversation not found for ID:', conversationId);
                 }
             });
 
@@ -1011,7 +1059,12 @@
 
         async function loadConversations() {
             try {
-                const response = await fetch('/api/conversation', {
+                let url = `/api/conversation?limit=${maxConversations}`;
+                if (paginationToken) {
+                    url += `&conversationId=${paginationToken.conversationId}`;
+                    url += `&updatedAt=${paginationToken.updatedAt}`;
+                }
+                const response = await fetch(url, {
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
                     },
@@ -1019,9 +1072,14 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    conversations = data.conversations || [];
-                    filteredConversations = [...conversations]; // Initialize with copy of conversations
+                    // Append new conversations, avoid duplicates
+                    const newConvs = (data.conversations || []).filter(c => !conversations.some(existing => existing._id === c._id));
+                    conversations = conversations.concat(newConvs);
+                
+                    filteredConversations = [...conversations];
+                    paginationToken = data.paginationToken;
                     renderConversations();
+                    //
                 } else {
                     console.error('Failed to load conversations');
                 }
@@ -1108,22 +1166,13 @@
                 return;
             }
 
-            // Escape HTML utility
-            function escapeHTML(str) {
-                return String(str)
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#39;');
-            }
             listElement.innerHTML = conversationsToShow.map(conv => {
                 const otherParticipant = conv.participants.find(p => p._id !== currentUser.id);
                 const name = otherParticipant ? escapeHTML(otherParticipant.name) : 'Unknown';
                 const lastMessage = conv.lastMessage ? escapeHTML(conv.lastMessage.content) : 'No messages yet';
                 const time = conv.updatedAt ? escapeHTML(formatTime(conv.updatedAt)) : '';
                 return `
-                    <div class="conversation-item ${currentConversation && currentConversation._id === conv._id ? 'active' : ''}" 
+                    <div id="${conv._id}" class="conversation-item ${currentConversation && currentConversation._id === conv._id ? 'active' : ''}" 
                         onclick="selectConversationMobile('${conv._id}')">
                         <div class="avatar">
                             <span>${getInitials(name)}</span>
@@ -1136,6 +1185,28 @@
                     </div>
                 `;
             }).join('');
+            // Add loading spinner if more conversations are available
+            console.log('Pagination token:', paginationToken);
+            if (paginationToken) {
+                const loadingDiv = document.createElement('div');
+                loadingDiv.className = 'loading';
+                loadingDiv.innerHTML = '<div class="spinner"></div>Loading more...';
+                listElement.appendChild(loadingDiv);
+            }
+
+            // Infinite scroll for conversation list (load more when scrolled to bottom)
+            if (!window._conversationListScrollHandlerAttached) {
+                window._conversationListScrollHandlerAttached = true;
+                const conversationList = document.getElementById('conversationList');
+                if (conversationList) {
+                    conversationList.addEventListener('scroll', async function() {
+                        // Check if scrolled to bottom (or near bottom)
+                        if (conversationList.scrollTop + conversationList.clientHeight >= conversationList.scrollHeight - 10 && paginationToken) {
+                            await loadConversations();
+                        }
+                    });
+                }
+            }
         }
         async function selectConversation(conversationId) {
             const conversation = conversations.find(c => c._id === conversationId);
@@ -1202,7 +1273,7 @@
         // load and render messages for the selected conversation
         async function loadMessages(conversationId) {
             try {
-                const response = await fetch(`/api/message/${conversationId}`, {
+                const response = await fetch(`/api/message/${conversationId}?limit=${maxConversations}`, {
                     headers: {
                         'Authorization': `Bearer ${authToken}`,
                     },
@@ -1210,7 +1281,7 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    renderMessages(data.messages || []);
+                    renderMessages(data.messages || [] , conversationId , false);
                 } else {
                     console.error('Failed to load messages');
                 }
@@ -1219,37 +1290,108 @@
             }
         }
 
-        function renderMessages(messages) {
-            const messagesArea = document.querySelector('.messagesArea');
-            messagesArea.id = `conversation-${messages[0].conversationID}`;
-            messagesArea.innerHTML = messages.map(message => {
+        function renderMessages(messages , conversationId , paginationFlag = false) {
+            console.log(' messages length:', messages.length);
+            const messagesArea = document.querySelector('.messages-area');
+            if (!messages || !messagesArea) return;
+
+            if(messages.length === 0) {
+                messagesArea.innerHTML = '';
+                messagesArea.id = `conversation-${conversationId}`;
+                return;
+            }
+
+            // Set conversation id once (only if not already set)
+            if(messagesArea.firstChild && messagesArea.id !== `conversation-${conversationId}`){
+                messagesArea.innerHTML = '';
+                messagesArea.id = `conversation-${messages[0].conversationID}`;
+            }
+        
+
+            let prevScrollHeight = messagesArea.scrollHeight;
+            let firstMessageBefore = messagesArea.firstChild;
+
+            messages.forEach(message => {
+                // Skip if message already exists
+                if (document.getElementById(`message-${message._id}`)) {
+                    return;
+                }
+
                 const isSent = message.sender._id === currentUser.id;
                 const time = formatTime(message.createdAt);
-                const status = message.status === 'sent' ? '✔' : message.status === 'read' ? '✔✔' : '';
-                return `
-                    <div class="message ${isSent ? 'sent' : ''}" id="message-${message._id}">
-                        <div class="message-bubble" style="display: flex; flex-direction: column; align-items: flex-start;">
-                            <span style="white-space: pre-line; width: 100%;">${escapeHTML(message.content)}</span>
-                            <div class="message-meta">
-                                <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${escapeHTML(time)}</span>
-                                <span class="status-check" style="align-self: flex-end; color: black; display: inline;">${currentUser.id === message.sender._id ? status : ''}</span>
-                            </div>
+                const status =
+                    message.status === 'sent' ? '✔' :
+                    message.status === 'read' ? '✔✔' :
+                    '';
+
+                // Create wrapper
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isSent ? 'sent' : ''}`;
+                messageDiv.id = `message-${message._id}`;
+
+                // Fill content
+                messageDiv.innerHTML = `
+                    <div class="message-bubble" style="display: flex; flex-direction: column; align-items: flex-start;">
+                        <span style="white-space: pre-line; width: 100%;">${escapeHTML(message.content)}</span>
+                        <div class="message-meta">
+                            <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${escapeHTML(time)}</span>
+                            <span class="status-check" style="align-self: flex-end; color: black; display: inline;">
+                                ${isSent ? status : ''}
+                            </span>
                         </div>
                     </div>
                 `;
-            }).join('');
+
+                // Append new message
+                // messagesArea.appendChild(messageDiv);
+                messagesArea.insertBefore(messageDiv, messagesArea.firstChild);
+
+            });
+
             
-            // Scroll to bottom
-            messagesArea.scrollTop = messagesArea.scrollHeight;
+            // Auto-scroll to the latest message
+            if (!paginationFlag) {
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+            } else if (firstMessageBefore) {
+                // Maintain scroll position when paginating
+                messagesArea.scrollTop = messagesArea.scrollHeight - prevScrollHeight;
+            }
 
             // update messages status
-            const len = messages.length;
-            if(messages[len - 1].status === 'sent' && messages[len - 1].sender.toString() !== currentUser.id) {
-                socket.emit('update messages status' , {conversationId : messages[0].conversationID.toString()})
+            if(messages[0].status === 'sent' && messages[0].sender.toString() !== currentUser.id) {
+                console.log('Emitting update messages status for conversation:', messages[0].conversationID.toString());
+                socket.emit('update messages status' , {conversationId : messagesArea.id.split('-')[1]})
             }
         }
 
-        // Message sending and receiving
+        // Add scroll event for infinite scroll (fetch older messages at top)
+        document.addEventListener('DOMContentLoaded', function() {
+            const messagesArea = document.querySelector('.messagesArea');
+            let loadingOldMessages = false;
+            if (!messagesArea) return;
+            messagesArea.addEventListener('scroll', async function() {
+                if (messagesArea.scrollTop === 0 && !loadingOldMessages) {
+                    loadingOldMessages = true;
+                    const idOfFirstMessage = document.querySelector('.messagesArea .message')?.id.split('-')[1];
+                    const response = await fetch(`/api/message/${currentConversation._id}?idOfOldestMessage=${idOfFirstMessage}&limit=${maxMessages}`, {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`,
+                        },
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.messages && data.messages.length > 0) {
+                            renderMessages(data.messages, currentConversation._id , true);
+                        }
+                    } else {
+                        console.error('Failed to load messages');
+                    }
+                    loadingOldMessages = false;
+                }
+            });
+        });
+
+        // Message sending from typing area
         function sendMessage() {
             const input = document.getElementById('messageInput');
             const content = input.value.trim();
@@ -1280,7 +1422,6 @@
             if (currentConversation && message.conversationID === currentConversation._id) {
                 // Add message to UI if in the same conversation
                 const isFromCurrentUser = message.sender === currentUser.id;
-
                 addMessageToUI(message, isFromCurrentUser);
             }
         }
@@ -1402,16 +1543,6 @@
             }
         }
 
-        // Escape HTML utility
-        function escapeHTML(str) {
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
         function addMessageToUI(message, isSent) {
             const messagesArea = document.querySelector('.messagesArea');
             const time = formatTime(message.createdAt || new Date());
@@ -1423,10 +1554,15 @@
             messageDiv.innerHTML = `
                 <div class="message-bubble" style="display: flex; flex-direction: column; align-items: flex-start;">
                     <span style="white-space: pre-line; width: 100%;">${escapeHTML(message.content)}</span>
-                    <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${time}</span>
-                    <span class="status-check" style="align-self: flex-end; color: black;">${ currentUser.id === message.sender ? status : ''}</span>
+                    <div class="message-meta">
+                        <span class="message-time" style="align-self: flex-end; margin-top: 2px;">${time}</span>
+                        <span class="status-check" style="align-self: flex-end; color: black; display: inline;">
+                            ${isSent ? status : ''}
+                        </span>
+                    </div>
                 </div>
             `;
+            
             if(currentUser.id !== message.sender.toString()){
                 console.log('Emitting message read for message:', message._id);
                 socket.emit('message read', {

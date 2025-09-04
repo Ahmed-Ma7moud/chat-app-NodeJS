@@ -1,6 +1,8 @@
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Message = require('../models/Message');
+const {objectId} = require('../validation/common');
+const mongoose = require('mongoose');
 const {getIo} = require('../config/socket');
 const onlineUsers = require('../services/onlineUsers');
 const sanitize = require('../utils/sanitize');
@@ -102,21 +104,80 @@ exports.createConversation = async (req, res) => {
 };
 
 exports.getConversations = async (req, res) => {
-    try {
-        const conversations = await Conversation.find({
-            participants: req.user.id
-        }).populate('participants', 'name phone isOnline lastSeen')
-        .populate('lastMessage', 'content createdAt sender')
-        .select('-__v')
-        .sort({ updatedAt: -1 })
-        .lean();
+        const maxLimit = 20;
+        let { updatedAt, conversationId, limit = maxLimit} = req.query;
+        let query = {};
 
+        if (updatedAt && conversationId) {
+            updatedAt = new Date(updatedAt);
+
+            if (isNaN(updatedAt.getTime())) {
+                return res.status(400).json({ message: "Invalid date format" });
+            }
+
+            const {error} = objectId.validate(conversationId);
+            if (error) {
+                return res.status(400).json({ message: "Invalid conversation ID" });
+            }
+
+            // if many conversations have the same updatedAt, we need to sort by _id descending
+            // then we will take the conversations with the same updatedAt but created first
+            query.$or = [
+                { updatedAt: { $lt: updatedAt } },
+                { updatedAt, _id: { $lt: new mongoose.Types.ObjectId(conversationId) } }
+            ];
+        }
+
+        if (limit) {
+            if (!/^[1-9]\d{0,1}$/.test(limit)) {
+                return res.status(400).json({ message: "Limit must be 1-2 digits and not start with 0" });
+            }
+            limit = Math.min(parseInt(limit, 10), maxLimit);
+        }
+
+    try {
+        query.participants = req.user.id;
+        const conversations = await Conversation.find(query)
+            .populate('participants', 'name phone isOnline lastSeen')
+            .populate('lastMessage', 'content createdAt sender')
+            .select('-__v')
+            .sort({ updatedAt: -1 , _id: -1 })
+            .limit(limit)
+            .lean();
+
+        const paginationToken = conversations.length == limit ? { conversationId: conversations[conversations.length - 1]._id , updatedAt: conversations[conversations.length - 1].updatedAt } : null;
         res.status(200).json({ 
             message: "success", 
-            conversations
+            conversations,
+            paginationToken
         });
     } catch (error) {
         console.error('Error fetching conversations:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 }
+
+exports.getConversation = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const {error} = objectId.validate(id);
+       if (error) {
+           return res.status(400).json({ message: "Invalid conversation ID" });
+       }
+
+       const conversation = await Conversation.findOne({ _id: id, participants: req.user.id })
+           .populate('participants', 'name phone isOnline lastSeen')
+           .populate('lastMessage', 'content createdAt sender')
+           .select('-__v')
+           .lean();
+
+       if (!conversation) {
+           return res.status(404).json({ message: "Conversation not found" });
+       }
+
+       res.status(200).json({ message: "success", conversation });
+   } catch (error) {
+       console.error('Error fetching conversation:', error);
+       res.status(500).json({ message: 'Internal server error' });
+   }
+};
