@@ -37,7 +37,7 @@ exports.createConversation = async (req, res) => {
             
             // Create new conversation
             let newConversation = new Conversation({
-                participants: [req.user.id, recipient._id],
+                participants: [req.user.id, recipient._id].sort(),
                 'lastMessage.content': messageContent,
                 'lastMessage.sender': req.user.id,
             });
