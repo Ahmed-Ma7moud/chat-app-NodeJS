@@ -1327,7 +1327,7 @@
             }
 
             // Set conversation id once (only if not already set)
-            if(messagesArea.firstChild && messagesArea.id !== `conversation-${conversationId}`){
+            if(messagesArea.id !== `conversation-${conversationId}` || !paginationFlag){
                 messagesArea.innerHTML = '';
                 messagesArea.id = `conversation-${messages[0].conversationID}`;
             }
