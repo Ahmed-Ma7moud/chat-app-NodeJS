@@ -33,12 +33,16 @@ const userSchema = new mongoose.Schema({
   isOnline: {
     type: Boolean,
     default: false
+  },
+  tokenVersion: {
+    type: Number,
+    default: 0
   }
 }, {timestamps:true}
 );
 
 userSchema.methods.generateAccessToken = function() {
-  const payload = { id: this._id, phone: this.phone , name: this.name };
+  const payload = { id: this._id, phone: this.phone , name: this.name , tokenVersion: this.tokenVersion };
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '60d' });
 }
 

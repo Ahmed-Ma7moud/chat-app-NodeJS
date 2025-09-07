@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const {register , login, me} = require('../controllers/authController');
+const {register , login, me , logout} = require('../controllers/authController');
 const {authenticate} = require('../middlewares/authMiddleware');
 const {loginValidator, registerValidator} = require('../middlewares/validationMiddleware');
 const {rateLimiter} = require('../middlewares/rateLimitMiddleware');
 router.post('/register', rateLimiter({ key: "register" , limit: 5, window: 60 * 60 }), registerValidator , register);
 router.post('/login', rateLimiter({ key: "login" , limit: 5, window: 10 * 60 }), loginValidator , login);
 router.get('/me', authenticate, me);
-
+router.post('/logout', authenticate, logout);
 module.exports = router;

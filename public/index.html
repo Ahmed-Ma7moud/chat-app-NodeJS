@@ -897,7 +897,7 @@
             }
         }
 
-        function logout() {
+        async function logout() {
             // Leave current conversation before logout
             if (currentConversation && socket) {
                 socket.emit('leave conversation', {
@@ -905,11 +905,21 @@
                 });
             }
             
-            localStorage.removeItem('authToken');
-            authToken = null;
-            currentUser = null;
-            currentConversation = null;
-            
+            const response = await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${authToken}`
+                }
+            });
+
+            const data = await response.json();
+            console.log(`Logout response status: ${data.message}`);
+            if (response.ok) {
+                localStorage.removeItem('authToken');
+                authToken = null;
+                currentUser = null;
+                currentConversation = null;
+            }
             if (socket) {
                 socket.disconnect();
             }
