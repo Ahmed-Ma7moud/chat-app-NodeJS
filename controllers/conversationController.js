@@ -26,18 +26,23 @@ exports.createConversation = async (req, res) => {
             const recipient = await User.findOne({ phone });
             if(!recipient)
                 return res.status(404).json({message : "User not found"});
-            // $all for order independence
+
+            const participants = [req.user.id, recipient._id].sort();
+            const participantsHash = participants.join('_');
+
             const existingConversation = await Conversation.findOne({
-                participants: { $all: [req.user.id, recipient._id] },
+                participantsHash,
                 type: 'private'
             });
+
 
             if(existingConversation)
                 return res.status(400).json({message : "Conversation already exists", conversation: existingConversation});
             
             // Create new conversation
             let newConversation = new Conversation({
-                participants: [req.user.id, recipient._id].sort(),
+                participants: participants,
+                participantsHash,
                 'lastMessage.content': messageContent,
                 'lastMessage.sender': req.user.id,
             });

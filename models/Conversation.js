@@ -6,6 +6,11 @@ const conversationSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  participantsHash: {
+    type: String,
+    unique: true,   
+    sparse: true    // only applied when field exists (if field is not null or undefined)
+  },
   type: {
     type: String,
     enum: ['private', 'group'],
@@ -43,9 +48,4 @@ const conversationSchema = new mongoose.Schema({
 
 conversationSchema.index({ updatedAt: -1, _id: -1 });
 
-// Unique index for only private conversations
-conversationSchema.index(
-  { participants: 1, type: 1 },
-  { unique: true, partialFilterExpression: { type: "private" } }
-);
 module.exports = mongoose.model('Conversation', conversationSchema);
