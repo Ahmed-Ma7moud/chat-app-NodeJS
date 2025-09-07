@@ -6,6 +6,7 @@ exports.getMessages = async (req, res) => {
     const maxLimit = 30;
     const { conversationID } = req.params;
     let { idOfOldestMessage, limit = maxLimit} = req.query;
+    console.log('Get messages request:', { conversationID, idOfOldestMessage, limit });
     let query = {};
     let { error } = objectId.validate(conversationID);
 

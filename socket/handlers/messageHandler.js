@@ -2,10 +2,20 @@ const Message = require('../../models/Message');
 const Conversation = require('../../models/Conversation');
 const onlineUsers = require('../../services/onlineUsers');
 const {messageSchema} = require('../../validation/message');
+const {socketBucketLimiter} = require('../../middlewares/socketAuth');
 const xss = require('xss');
 module.exports = (socket, io) => {
   // Handle sending messages
   socket.on('message', async (data) => {
+
+    // wait 10 seconds for 1 token
+    const limitResult = await socketBucketLimiter(`message:${socket.user.id}`, 5, .1);
+    if (limitResult === 0) {
+      return socket.emit("err", "Rate limit exceeded");
+    }else if (limitResult === -1) {
+      return socket.emit("err", "Internal server error");
+    }
+
     let { conversationID, message , randomId} = data;
 
     if (!conversationID || !message || !randomId) {

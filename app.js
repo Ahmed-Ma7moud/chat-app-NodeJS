@@ -4,7 +4,7 @@ const { initIo } = require('./config/socket');
 const { initializeSocket } = require('./socket/socketServer');
 require('dotenv').config();
 const { connectDB } = require('./config/DB');
-
+const {initRedis} = require('./config/redis');
 const app = express();
 app.use(express.static('public'));
 app.use(express.json());
@@ -15,7 +15,7 @@ const io = initIo(httpServer);
 
 // Initialize database connection
 connectDB();
-
+initRedis();
 // Routes
 app.get('/', (req, res) => {res.sendFile(__dirname + '/public/index.html');});
 app.use('/api/auth', require('./routes/authRoutes'));

@@ -7,6 +7,7 @@
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -553,6 +554,12 @@
                 width: 45px;
                 height: 45px;
             }
+
+            .send-button.blocked {
+                opacity: 0.5 !important;
+                pointer-events: none !important;
+                cursor: not-allowed !important;
+            }
         }
     </style>
 </head>
@@ -1053,8 +1060,25 @@
             });
 
             socket.on('err', (error) => {
-                console.error('Socket error:', error);
-                alert(error.message || 'An error occurred');
+                  if (error === "Rate limit exceeded") {
+                    const sendBtn = document.querySelector(".send-button");
+
+                    if (sendBtn) {
+                    // disable button
+                    sendBtn.classList.add('blocked');
+                    sendBtn.title = "Please wait 10 seconds before sending another message";
+
+                    // re-enable after 10 seconds
+                    setTimeout(() => {
+                        sendBtn.classList.remove('blocked');
+                        sendBtn.title = "";
+                    }, 10000);
+                    }
+
+                    alert('Rate limit exceeded. Please wait 10 seconds before sending another message.');
+                } else {
+                    alert(error.message || error);
+                }
             });
         }
 
@@ -1394,12 +1418,17 @@
 
         // Message sending from typing area
         function sendMessage() {
+            const sendBtn = document.querySelector('.send-button');
+            if (sendBtn && sendBtn.classList.contains('blocked')) {
+                // Button is blocked, do nothing
+                return;
+            }
             const input = document.getElementById('messageInput');
             const content = input.value.trim();
             if (!content || !currentConversation) return;
-            
+
             const randomId = Math.random().toString(36).substring(2, 15);
-            
+
             socket.emit('message', {
                 conversationID: currentConversation._id,
                 message: content,

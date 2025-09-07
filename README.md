@@ -65,9 +65,9 @@ This is a real-time chat application built with Node.js, Express, MongoDB, and S
 - Create and join conversations
 - Real-time messaging with Socket.IO
 - Typing indicators and online status
+- Tracking messages status (seen/delivered)
+- Tracking user online/offline status
 - Input validation and sanitization for security
+- Pagination for loading older messages and conversations
+- Rate limiting on login , register and sending messages to prevent spam
 
-## Notes
-
-- Make sure MongoDB is running before starting the app.
-- The app is for educational/demo purposes and may need further hardening for production use.
