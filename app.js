@@ -6,6 +6,9 @@ require('dotenv').config();
 const { connectDB } = require('./config/DB');
 const {initRedis} = require('./config/redis');
 const app = express();
+
+app.set('trust proxy', true);
+
 app.use(express.static('public'));
 app.use(express.json());
 
