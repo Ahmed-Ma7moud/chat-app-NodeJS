@@ -33,17 +33,19 @@ exports.login = async (req, res, next) => {
         return res.status(400).json({ message: 'Phone number and password are required' });
     }
     try {
-        const user = await User.findOne({ 
-            phone, 
-            password 
-        });
+        const user = await User.findOne({ phone });
 
         if (!user) {
             return res.status(401).json({ message: 'Invalid phone number or password' });
         }
 
+        const isMatch = await user.comparePassword(password);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid phone number or password' });
+        }
+
         user.tokenVersion = Math.floor(Math.random() * 9000) + 1000;
-        await user.save();
+        await user.save({ validateBeforeSave: false });
 
         // Generate JWT token
         const token = user.generateAccessToken();
